@@ -7,6 +7,11 @@ from sqlalchemy.orm import DeclarativeBase
 _default_db = Path(__file__).resolve().parent.parent / "osint.db"
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///{_default_db}")
 
+# SQLite fayl yo'lini olish va papkasini yaratish
+_db_path = DATABASE_URL.replace("sqlite+aiosqlite:///", "")
+if _db_path:
+    Path(_db_path).parent.mkdir(parents=True, exist_ok=True)
+
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
