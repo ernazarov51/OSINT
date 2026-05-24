@@ -114,7 +114,7 @@ _MODELS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0
 
 
 def _get_client() -> genai.Client:
-    api_key = "AIzaSyDMBLD9h-2sBWYqnlPcELpO4rf1i0Uk9Ss"
+    api_key = os.environ.get("GOOGLE_API_KEY", "AIzaSyDMBLD9h-2sBWYqnlPcELpO4rf1i0Uk9Ss")
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY o'rnatilmagan")
     return genai.Client(api_key=api_key)
