@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/osint/data
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-32-char-string}
+      DATABASE_URL: sqlite+aiosqlite:////osint/data/osint.db
+    restart: unless-stopped

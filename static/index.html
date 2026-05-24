@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSINT Field</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#f4f4f5; --surface:#ffffff; --border:#d4d4d8;
+      --text:#18181b; --muted:#71717a; --light:#a1a1aa;
+      --found:#15803d; --found-bg:#f0fdf4; --found-br:#bbf7d0;
+      --unver:#b45309; --unver-bg:#fffbeb; --unver-br:#fde68a;
+      --accent:#3f3f46; --red:#dc2626;
+      --blue:#1d4ed8; --blue-bg:#dbeafe;
+      --purple:#6d28d9; --purple-bg:#ede9fe;
+    }
+    body { font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:14px; line-height:1.5; background:var(--bg); color:var(--text); min-height:100vh; }
+    .wrap { max-width:860px; margin:0 auto; padding:0 20px; }
+
+    /* Header */
+    header { background:var(--surface); border-bottom:1px solid var(--border); }
+    .header-inner { display:flex; align-items:center; gap:12px; padding:14px 0; }
+    .logo { font-size:15px; font-weight:600; letter-spacing:-0.2px; }
+    .logo-sub { font-size:12px; color:var(--muted); }
+    .header-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+    .auth-username { font-size:13px; font-weight:500; }
+    .btn-sm { height:30px; padding:0 12px; background:var(--accent); color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:500; font-family:inherit; cursor:pointer; transition:background .12s; }
+    .btn-sm:hover { background:#27272a; }
+    .btn-sm.outline { background:none; color:var(--accent); border:1px solid var(--border); }
+    .btn-sm.outline:hover { background:var(--bg); }
+    .btn-link { background:none; border:none; font-size:12px; color:var(--muted); cursor:pointer; font-family:inherit; padding:0; text-decoration:underline; }
+
+    /* Search */
+    main { padding:32px 0 60px; }
+    .search-row { display:flex; gap:10px; margin-bottom:8px; }
+    .search-row input { flex:1; height:46px; padding:0 16px; border:1px solid var(--border); border-radius:10px; font-size:15px; font-family:inherit; background:var(--surface); color:var(--text); outline:none; transition:border-color .12s, box-shadow .12s; }
+    .search-row input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(63,63,70,.08); }
+    .btn { height:38px; padding:0 18px; background:var(--accent); color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:500; font-family:inherit; cursor:pointer; white-space:nowrap; transition:background .12s; }
+    .btn:hover:not(:disabled) { background:#27272a; }
+    .btn:disabled { background:var(--light); cursor:not-allowed; }
+    .btn-search { height:46px; padding:0 24px; font-size:14px; border-radius:10px; }
+
+    .search-meta { display:flex; align-items:center; gap:10px; margin-bottom:18px; min-height:22px; }
+    .type-badge { font-size:11px; font-weight:600; padding:3px 10px; border-radius:12px; border:1px solid; letter-spacing:0.3px; flex-shrink:0; }
+    .hint { font-size:12px; color:var(--muted); }
+
+    .status-line { font-size:13px; color:var(--muted); min-height:22px; margin-bottom:14px; display:flex; align-items:center; gap:6px; }
+    .spinner { width:13px; height:13px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .65s linear infinite; flex-shrink:0; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .err { color:var(--red); }
+
+    /* Result cards */
+    .source-list { display:flex; flex-direction:column; gap:6px; }
+    .src-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    .src-head { display:flex; align-items:center; gap:10px; padding:11px 14px; }
+    .src-name { font-weight:500; font-size:13px; flex:1; }
+    .badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; letter-spacing:0.3px; }
+    .b-found { background:var(--found-bg); color:var(--found); border:1px solid var(--found-br); }
+    .b-no    { background:var(--bg); color:var(--light); border:1px solid var(--border); }
+    .b-unver { background:var(--unver-bg); color:var(--unver); border:1px solid var(--unver-br); }
+    .src-body { border-top:1px solid var(--border); padding:12px 14px; background:#fafafa; }
+    .unver-note { border-top:1px solid var(--unver-br); padding:7px 14px; background:var(--unver-bg); font-size:12px; color:var(--unver); }
+    .avatar { width:72px; height:72px; border-radius:50%; border:1px solid var(--border); display:block; margin-bottom:12px; object-fit:cover; }
+    .kv  { display:grid; grid-template-columns:110px 1fr; gap:4px 12px; }
+    .kk  { font-size:12px; color:var(--muted); padding:1px 0; }
+    .kv_ { font-size:13px; padding:1px 0; word-break:break-word; }
+    .kv_ a { color:var(--accent); text-decoration:none; }
+    .kv_ a:hover { text-decoration:underline; }
+    .r-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:18px; margin-bottom:14px; }
+    .r-card-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin-bottom:14px; }
+    .r-kv  { display:grid; grid-template-columns:160px 1fr; gap:6px 16px; }
+    .r-kk  { font-size:13px; color:var(--muted); }
+    .r-kv_ { font-size:13px; }
+    .r-kv_.bold { font-weight:600; }
+    .r-kv_ a { color:var(--accent); text-decoration:none; }
+    .tag-warn { font-size:11px; font-weight:600; color:var(--red); margin-left:6px; }
+    .section-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; color:var(--light); margin:14px 0 6px; }
+
+    /* Map */
+    .map-box { height:320px; border-radius:8px; border:1px solid var(--border); overflow:hidden; margin-bottom:14px; }
+
+    /* Profile pivot */
+    .summary-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-bottom:18px; }
+    .sum-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+    .sum-num { font-size:24px; font-weight:700; line-height:1; }
+    .sum-label { font-size:11px; color:var(--muted); margin-top:4px; }
+    .pivot-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:12px; }
+    .pivot-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin-bottom:10px; }
+    .pivot-items { display:flex; flex-wrap:wrap; gap:8px; }
+    .pivot-chip { display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:5px 10px; font-size:13px; }
+    .pivot-val { font-weight:500; }
+    .btn-pivot { height:26px; padding:0 10px; background:var(--blue-bg); color:var(--blue); border:1px solid #bfdbfe; border-radius:5px; font-size:11px; font-weight:500; font-family:inherit; cursor:pointer; transition:background .12s; }
+    .btn-pivot:hover { background:#bfdbfe; }
+
+    /* Web footprint */
+    .web-list { display:flex; flex-direction:column; gap:8px; }
+    .web-hit { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+    .web-title { font-size:13px; font-weight:500; margin-bottom:3px; }
+    .web-title a { color:var(--accent); text-decoration:none; }
+    .web-title a:hover { text-decoration:underline; }
+    .web-url { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:4px; }
+    .web-snippet { font-size:12px; color:var(--muted); }
+    .web-query { font-size:11px; color:var(--light); margin-top:4px; font-style:italic; }
+
+    /* Holehe */
+    .site-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; }
+    .site-card { background:var(--surface); border:1px solid var(--found-br); border-radius:7px; padding:10px 12px; }
+    .site-name { font-size:13px; font-weight:500; }
+    .site-domain { font-size:11px; color:var(--muted); margin-top:2px; }
+    .site-domain a { color:var(--accent); text-decoration:none; }
+    .site-extra { font-size:11px; color:var(--muted); margin-top:3px; }
+
+    /* Image */
+    .img-preview { max-width:100%; max-height:260px; border-radius:8px; border:1px solid var(--border); display:block; margin-bottom:14px; }
+    .rev-links { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .rev-link { padding:6px 12px; border:1px solid var(--border); border-radius:6px; font-size:12px; color:var(--accent); text-decoration:none; background:var(--surface); }
+    .rev-link:hover { border-color:var(--accent); }
+
+    /* AI bar */
+    .ai-bar { display:flex; align-items:center; gap:14px; padding:14px 16px; background:var(--purple-bg); border:1px solid #c4b5fd; border-radius:10px; margin-top:24px; }
+    .btn-ai { height:36px; padding:0 18px; background:var(--purple); color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; display:flex; align-items:center; gap:6px; transition:background .12s; white-space:nowrap; }
+    .btn-ai:hover:not(:disabled) { background:#5b21b6; }
+    .btn-ai:disabled { opacity:.6; cursor:not-allowed; }
+    .btn-copy { height:36px; padding:0 14px; background:var(--surface); color:var(--accent); border:1px solid var(--border); border-radius:7px; font-size:13px; font-weight:500; font-family:inherit; cursor:pointer; display:flex; align-items:center; gap:6px; transition:background .12s, border-color .12s; white-space:nowrap; }
+    .btn-copy:hover { background:var(--bg); border-color:var(--accent); }
+    .btn-copy.copied { background:var(--found-bg); color:var(--found); border-color:var(--found-br); }
+
+    /* ── GitHub repos ── */
+    .repo-list { display:flex; flex-direction:column; gap:6px; }
+    .repo-card { background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:10px 12px; }
+    .repo-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px; }
+    .repo-name { font-size:13px; font-weight:600; color:var(--blue); text-decoration:none; }
+    .repo-name:hover { text-decoration:underline; }
+    .repo-stats { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    .repo-lang { font-size:11px; color:var(--muted); background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1px 8px; }
+    .repo-stat { font-size:11px; color:var(--muted); }
+    .repo-desc { font-size:12px; color:var(--muted); margin:3px 0; line-height:1.4; }
+    .repo-topics { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+    .repo-topic { font-size:10px; background:#dbeafe; color:#1d4ed8; border-radius:10px; padding:1px 7px; }
+    .repo-date { font-size:10px; color:var(--light); margin-top:5px; }
+
+    /* ── Image gallery ── */
+    .img-gallery { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
+    .img-gallery-item {
+      position:relative; cursor:pointer;
+      border-radius:10px; overflow:hidden;
+      border:2px solid var(--border);
+      transition:border-color .15s, transform .15s;
+      width:90px; height:90px; flex-shrink:0;
+    }
+    .img-gallery-item:hover { border-color:var(--accent); transform:scale(1.04); }
+    .img-gallery-item img { width:100%; height:100%; object-fit:cover; display:block; }
+    .img-gallery-item .img-src-label {
+      position:absolute; bottom:0; left:0; right:0;
+      background:rgba(0,0,0,.55); color:#fff;
+      font-size:9px; font-weight:600; text-align:center;
+      padding:2px 4px; letter-spacing:0.3px;
+    }
+
+    /* ── Lightbox ── */
+    .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.82); z-index:200; display:none; align-items:center; justify-content:center; flex-direction:column; gap:14px; }
+    .lightbox.open { display:flex; }
+    .lightbox img { max-width:90vw; max-height:75vh; border-radius:10px; object-fit:contain; box-shadow:0 8px 40px rgba(0,0,0,.6); }
+    .lightbox-info { color:#e4e4e7; font-size:13px; text-align:center; }
+    .lightbox-info a { color:#a78bfa; }
+    .lightbox-close { position:fixed; top:18px; right:22px; background:none; border:none; color:#fff; font-size:28px; cursor:pointer; line-height:1; opacity:.8; }
+    .lightbox-close:hover { opacity:1; }
+    .lightbox-nav { position:fixed; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.12); border:none; color:#fff; font-size:26px; cursor:pointer; border-radius:50%; width:44px; height:44px; display:flex; align-items:center; justify-content:center; }
+    .lightbox-nav:hover { background:rgba(255,255,255,.25); }
+    .lightbox-nav.prev { left:16px; }
+    .lightbox-nav.next { right:16px; }
+    .ai-hint-text { font-size:12px; color:var(--purple); }
+    .ai-output { background:var(--surface); border:1px solid #c4b5fd; border-radius:10px; padding:22px 24px; font-size:14px; line-height:1.8; margin-top:12px; }
+    .ai-output h2 { font-size:15px; font-weight:700; margin:20px 0 8px; padding-bottom:4px; border-bottom:1px solid var(--border); color:var(--text); }
+    .ai-output h2:first-child { margin-top:0; }
+    .ai-output h3 { font-size:13px; font-weight:600; margin:12px 0 5px; color:var(--purple); }
+    .ai-output ul, .ai-output ol { padding-left:22px; margin:6px 0 10px; }
+    .ai-output li { margin:5px 0; }
+    .ai-output strong { font-weight:700; color:var(--text); }
+    .ai-output em { color:var(--muted); font-style:italic; }
+    .ai-output code { background:#f3e8ff; border:1px solid #e9d5ff; border-radius:4px; padding:1px 6px; font-size:12px; font-family:monospace; color:var(--purple); }
+    .ai-output hr { border:none; border-top:1px solid var(--border); margin:16px 0; }
+    .ai-cursor { display:inline-block; width:2px; height:14px; background:var(--purple); animation:blink .7s step-start infinite; vertical-align:text-bottom; margin-left:1px; }
+    @keyframes blink { 50% { opacity:0; } }
+
+    /* Analytics Dashboard */
+    .an-loading { display:flex; flex-direction:column; align-items:center; gap:12px; padding:40px 0; color:var(--muted); font-size:14px; }
+    .an-spinner { width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--purple); border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .analytics-wrap { margin-top:16px; display:flex; flex-direction:column; gap:14px; }
+    .an-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .an-metric { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; text-align:center; }
+    .an-metric-value { font-size:22px; font-weight:700; color:var(--purple); line-height:1.2; }
+    .an-metric-label { font-size:11px; color:var(--muted); margin-top:4px; }
+    .an-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .an-panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
+    .an-panel-title { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px; margin-bottom:12px; }
+    .an-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+    .an-bar-name { width:76px; font-size:12px; font-weight:500; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .an-bar-track { flex:1; height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
+    .an-bar-fill { height:100%; border-radius:4px; }
+    .an-bar-pct { width:30px; text-align:right; font-size:11px; color:var(--muted); flex-shrink:0; }
+    .an-not-found { opacity:0.38; }
+    .an-loc-row { margin-bottom:10px; }
+    .an-loc-head { display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px; }
+    .an-loc-name { font-weight:500; }
+    .an-loc-pct { color:var(--muted); }
+    .an-loc-track { height:6px; background:var(--bg); border-radius:3px; overflow:hidden; }
+    .an-loc-fill { height:100%; background:var(--purple); border-radius:3px; }
+    .an-loc-sources { margin-top:4px; display:flex; flex-wrap:wrap; gap:3px; }
+    .an-source-tag { font-size:10px; background:var(--purple-bg); color:var(--purple); border-radius:4px; padding:1px 6px; }
+    .an-id-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .an-id-label { font-size:11px; color:var(--muted); margin-bottom:3px; }
+    .an-id-bar { height:6px; background:var(--bg); border-radius:3px; overflow:hidden; }
+    .an-id-fill { height:100%; border-radius:3px; }
+    .an-risk-item { display:flex; align-items:flex-start; gap:8px; margin-bottom:7px; padding:8px 10px; border-radius:8px; }
+    .an-risk-high { background:#fef2f2; border:1px solid #fecaca; }
+    .an-risk-medium { background:#fffbeb; border:1px solid #fde68a; }
+    .an-risk-low { background:#f0fdf4; border:1px solid #bbf7d0; }
+    .an-risk-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; flex-shrink:0; text-transform:uppercase; }
+    .an-risk-high .an-risk-badge { background:#dc2626; color:#fff; }
+    .an-risk-medium .an-risk-badge { background:#d97706; color:#fff; }
+    .an-risk-low .an-risk-badge { background:#15803d; color:#fff; }
+    .an-risk-desc { font-size:12px; line-height:1.45; }
+    .an-tech-item { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); }
+    .an-tech-item:last-child { border-bottom:none; }
+    .an-tech-label { font-size:12px; font-weight:500; }
+    .an-tech-conf { font-size:10px; color:var(--purple); background:var(--purple-bg); padding:1px 6px; border-radius:10px; margin-left:6px; flex-shrink:0; }
+    .an-tech-val { font-size:12px; color:var(--muted); max-width:55%; text-align:right; }
+    .an-graph-wrap { background:var(--bg); border-radius:8px; overflow:hidden; }
+    .an-signal-bar-wrap { margin-bottom:9px; }
+    .an-signal-label { display:flex; justify-content:space-between; font-size:12px; margin-bottom:3px; }
+    .an-signal-track { height:10px; background:var(--bg); border-radius:5px; overflow:hidden; }
+    .an-signal-fill { height:100%; border-radius:5px; }
+    @media(max-width:600px) { .an-metrics{grid-template-columns:repeat(2,1fr)} .an-row-2{grid-template-columns:1fr} }
+
+    /* History */
+    .history-panel { margin-top:28px; padding-top:20px; border-top:1px solid var(--border); }
+    .history-list { display:flex; flex-direction:column; gap:6px; }
+    .h-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+    .h-head { display:flex; align-items:center; gap:10px; padding:11px 14px; }
+    .h-badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:4px; flex-shrink:0; letter-spacing:0.3px; }
+    .hb-username { background:#dbeafe; color:#1d4ed8; }
+    .hb-ip       { background:#ede9fe; color:#6d28d9; }
+    .hb-phone    { background:#ffedd5; color:#c2410c; }
+    .hb-holehe   { background:#ccfbf1; color:#0f766e; }
+    .hb-image    { background:#fce7f3; color:#be185d; }
+    .hb-email    { background:#fef9c3; color:#a16207; }
+    .hb-profile  { background:#f3e8ff; color:#7c3aed; }
+    .h-query { font-size:13px; font-weight:500; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .h-date { font-size:11px; color:var(--muted); flex-shrink:0; }
+    .h-del { background:none; border:none; font-size:18px; line-height:1; color:var(--light); cursor:pointer; padding:0 2px; flex-shrink:0; }
+    .h-del:hover { color:var(--red); }
+    .h-summary { padding:8px 14px 10px; font-size:12px; color:var(--muted); border-top:1px solid var(--border); background:#fafafa; }
+
+    /* Modal */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:none; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:28px; width:360px; max-width:calc(100vw - 40px); position:relative; }
+    .modal-close { position:absolute; top:14px; right:16px; background:none; border:none; font-size:20px; color:var(--muted); cursor:pointer; }
+    .modal-close:hover { color:var(--text); }
+    .modal-tabs { display:flex; border-bottom:1px solid var(--border); margin-bottom:20px; }
+    .modal-tab { background:none; border:none; border-bottom:2px solid transparent; padding:8px 16px; font-size:13px; font-weight:500; color:var(--muted); cursor:pointer; font-family:inherit; margin-bottom:-1px; }
+    .modal-tab.active { color:var(--text); border-bottom-color:var(--text); }
+    .form-group { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
+    .form-label { font-size:12px; font-weight:500; color:var(--muted); }
+    input[type="text"], input[type="email"], input[type="password"] { height:38px; padding:0 12px; border:1px solid var(--border); border-radius:7px; font-size:14px; font-family:inherit; background:var(--surface); color:var(--text); outline:none; transition:border-color .12s; }
+    input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus { border-color:var(--accent); }
+    .btn-full { width:100%; height:38px; background:var(--accent); color:#fff; border:none; border-radius:7px; font-size:14px; font-weight:500; font-family:inherit; cursor:pointer; margin-top:4px; }
+    .btn-full:hover { background:#27272a; }
+    .btn-full:disabled { background:var(--light); cursor:not-allowed; }
+    .modal-error { font-size:12px; color:var(--red); margin-top:10px; min-height:18px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="wrap header-inner">
+    <span class="logo">OSINT</span>
+    <span class="logo-sub">Field Intelligence</span>
+    <div class="header-right">
+      <div id="auth-section">
+        <button class="btn-sm outline" onclick="openModal('login')">Kirish</button>
+        <button class="btn-sm" onclick="openModal('register')">Ro'yxatdan o'tish</button>
+      </div>
+      <button class="btn-sm outline" id="btn-history" style="display:none" onclick="toggleHistory()">Tarix</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+  <!-- Search -->
+  <div class="search-row" style="margin-top:28px;">
+    <input id="q-field" type="text" placeholder="Username, IP, email, +998..., yoki rasm URL..." autocomplete="off">
+    <button class="btn btn-search" id="btn-search" onclick="doSearch()">Qidirish</button>
+  </div>
+  <div class="search-meta">
+    <span id="type-badge" class="type-badge" style="display:none"></span>
+    <span class="hint">Username, IP manzil, email, telefon (+998...) yoki rasm URL kiriting</span>
+  </div>
+
+  <div id="st-field" class="status-line"></div>
+  <div id="r-field"></div>
+  <div id="map-field" class="map-box" style="display:none; margin-bottom:14px;"></div>
+
+  <!-- AI Section (shown after results) -->
+  <div id="ai-section" style="display:none;">
+    <div class="ai-bar">
+      <button class="btn-ai" id="btn-ai" onclick="doAiAnalyze()">✦ AI korrelyatsiya tahlili</button>
+      <button class="btn-copy" id="btn-copy-json" onclick="copyJson()" title="JSON nusxalash">
+        <span id="copy-icon">⎘</span> JSON nusxalash
+      </button>
+      <span class="ai-hint-text">Barcha topilgan ma'lumotlarni AI bog'laydi va tahlil qiladi</span>
+    </div>
+    <div id="r-ai"></div>
+  </div>
+
+  <!-- History (toggleable) -->
+  <div id="history-panel" class="history-panel" style="display:none;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <span class="section-label" style="margin:0;">Qidiruv tarixi</span>
+      <button class="btn-link" onclick="toggleHistory()">Yopish</button>
+    </div>
+    <div id="st-history" class="status-line"></div>
+    <div id="r-history"></div>
+  </div>
+
+</div>
+</main>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox" onclick="lbBgClick(event)">
+  <button class="lightbox-close" onclick="closeLb()">×</button>
+  <button class="lightbox-nav prev" onclick="lbNav(-1)">‹</button>
+  <img id="lb-img" src="" alt="">
+  <div class="lightbox-info">
+    <span id="lb-source"></span> &nbsp;·&nbsp;
+    <a id="lb-link" href="#" target="_blank">To'liq o'lchamda ochish ↗</a>
+    &nbsp;·&nbsp; <span id="lb-counter"></span>
+  </div>
+  <button class="lightbox-nav next" onclick="lbNav(1)">›</button>
+</div>
+
+<!-- Auth Modal -->
+<div id="auth-modal" class="modal-overlay" onclick="modalBgClick(event)">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal()">×</button>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="mt-login" onclick="switchAuthTab('login')">Kirish</button>
+      <button class="modal-tab" id="mt-register" onclick="switchAuthTab('register')">Ro'yxatdan o'tish</button>
+    </div>
+    <div id="form-login">
+      <div class="form-group"><label class="form-label">Username</label><input type="text" id="l-username" placeholder="username" autocomplete="username"></div>
+      <div class="form-group"><label class="form-label">Parol</label><input type="password" id="l-password" placeholder="••••••" autocomplete="current-password"></div>
+      <button class="btn-full" id="btn-login" onclick="doLogin()">Kirish</button>
+    </div>
+    <div id="form-register" style="display:none;">
+      <div class="form-group"><label class="form-label">Username</label><input type="text" id="r-uname" placeholder="username" autocomplete="username"></div>
+      <div class="form-group"><label class="form-label">Email</label><input type="email" id="r-email" placeholder="user@example.com" autocomplete="email"></div>
+      <div class="form-group"><label class="form-label">Parol (kamida 6 ta belgi)</label><input type="password" id="r-password" placeholder="••••••" autocomplete="new-password"></div>
+      <button class="btn-full" id="btn-register" onclick="doRegister()">Ro'yxatdan o'tish</button>
+    </div>
+    <div class="modal-error" id="auth-error"></div>
+  </div>
+</div>
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────────────────
+const e = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function setSt(html)  { document.getElementById('st-field').innerHTML = html; }
+function setRes(html) { document.getElementById('r-field').innerHTML = html; }
+function spin(txt)    { return `<div class="spinner"></div>${txt}`; }
+function rkv(rows)    { return `<div class="r-kv">${rows}</div>`; }
+function rrow(k,v,bold) { return `<span class="r-kk">${k}</span><span class="r-kv_${bold?' bold':''}">${v}</span>`; }
+
+document.getElementById('q-field').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter') doSearch();
+});
+['l-username','l-password'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', ev => { if (ev.key==='Enter') doLogin(); });
+});
+['r-uname','r-email','r-password'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', ev => { if (ev.key==='Enter') doRegister(); });
+});
+
+// ── Token / Auth state ────────────────────────────────────────────────────
+function getToken()    { return localStorage.getItem('osint_token'); }
+function setToken(t)   { localStorage.setItem('osint_token', t); }
+function clearToken()  { localStorage.removeItem('osint_token'); localStorage.removeItem('osint_user'); }
+function getUser()     { return localStorage.getItem('osint_user'); }
+function setUser(u)    { localStorage.setItem('osint_user', u); }
+
+function updateAuthUI() {
+  const u = getUser();
+  const sec = document.getElementById('auth-section');
+  const hbtn = document.getElementById('btn-history');
+  if (u) {
+    sec.innerHTML = `<span class="auth-username" style="font-size:13px;font-weight:500;">${e(u)}</span>
+      <button class="btn-link" onclick="logout()" style="margin-left:8px;">Chiqish</button>`;
+    hbtn.style.display = '';
+  } else {
+    sec.innerHTML = `<button class="btn-sm outline" onclick="openModal('login')">Kirish</button>
+      <button class="btn-sm" onclick="openModal('register')" style="margin-left:6px;">Ro'yxatdan o'tish</button>`;
+    hbtn.style.display = 'none';
+  }
+}
+
+// ── API ───────────────────────────────────────────────────────────────────
+async function api(url, opts={}) {
+  const token = getToken();
+  const headers = {...(opts.headers||{})};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const r = await fetch(url, {...opts, headers});
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.detail || r.statusText);
+  return d;
+}
+async function apiPost(url, body) {
+  return api(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────
+function openModal(which) {
+  document.getElementById('auth-modal').classList.add('open');
+  document.getElementById('auth-error').textContent = '';
+  switchAuthTab(which);
+}
+function closeModal() { document.getElementById('auth-modal').classList.remove('open'); }
+function modalBgClick(ev) { if (ev.target===document.getElementById('auth-modal')) closeModal(); }
+document.addEventListener('keydown', ev => { if (ev.key==='Escape') closeModal(); });
+function switchAuthTab(name) {
+  document.getElementById('form-login').style.display    = name==='login' ? '' : 'none';
+  document.getElementById('form-register').style.display = name==='register' ? '' : 'none';
+  document.getElementById('mt-login').classList.toggle('active', name==='login');
+  document.getElementById('mt-register').classList.toggle('active', name==='register');
+  document.getElementById('auth-error').textContent = '';
+}
+async function doLogin() {
+  const username = document.getElementById('l-username').value.trim();
+  const password = document.getElementById('l-password').value;
+  const errEl = document.getElementById('auth-error');
+  const btn   = document.getElementById('btn-login');
+  if (!username || !password) { errEl.textContent="Maydonlarni to'ldiring"; return; }
+  btn.disabled=true; errEl.textContent='';
+  try {
+    const d = await apiPost('/auth/login', {username, password});
+    setToken(d.access_token); setUser(d.username);
+    closeModal(); updateAuthUI();
+  } catch(err) { errEl.textContent=err.message; }
+  finally { btn.disabled=false; }
+}
+async function doRegister() {
+  const username = document.getElementById('r-uname').value.trim();
+  const email    = document.getElementById('r-email').value.trim();
+  const password = document.getElementById('r-password').value;
+  const errEl = document.getElementById('auth-error');
+  const btn   = document.getElementById('btn-register');
+  if (!username || !email || !password) { errEl.textContent="Barcha maydonlarni to'ldiring"; return; }
+  btn.disabled=true; errEl.textContent='';
+  try {
+    const d = await apiPost('/auth/register', {username, email, password});
+    setToken(d.access_token); setUser(d.username);
+    closeModal(); updateAuthUI();
+  } catch(err) { errEl.textContent=err.message; }
+  finally { btn.disabled=false; }
+}
+function logout() {
+  clearToken(); updateAuthUI();
+  document.getElementById('history-panel').style.display = 'none';
+}
+
+// ── Type detection ────────────────────────────────────────────────────────
+function detectType(q) {
+  if (/^https?:\/\//i.test(q)) return 'image';
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(q)) return 'ip';
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q)) return 'email';
+  const cleaned = q.replace(/[\s\-\(\)]/g, '');
+  if (/^\+\d{7,15}$/.test(cleaned)) return 'phone';
+  return 'username';
+}
+
+const TYPE_META = {
+  username: { label:'Profil tahlili', color:'#1d4ed8' },
+  ip:       { label:'IP / Geo',       color:'#6d28d9' },
+  email:    { label:'Email + Holehe', color:'#b45309' },
+  phone:    { label:'Telefon',        color:'#c2410c' },
+  image:    { label:'Rasm tahlili',   color:'#be185d' },
+};
+
+// ── State ─────────────────────────────────────────────────────────────────
+let _lastData = null;
+let _leafletMap = null;
+
+// ── Main search ───────────────────────────────────────────────────────────
+async function doSearch() {
+  const q = document.getElementById('q-field').value.trim();
+  if (!q) return;
+
+  const type = detectType(q);
+  const meta = TYPE_META[type];
+
+  const badge = document.getElementById('type-badge');
+  badge.textContent = meta.label;
+  badge.style.display = 'inline-block';
+  badge.style.background = meta.color + '18';
+  badge.style.color = meta.color;
+  badge.style.borderColor = meta.color + '50';
+
+  document.getElementById('ai-section').style.display = 'none';
+  document.getElementById('r-ai').innerHTML = '';
+  setRes(''); hideMap(); _lastData = null;
+
+  const btn = document.getElementById('btn-search');
+  btn.disabled = true;
+
+  try {
+    if      (type === 'username') await searchUsername(q);
+    else if (type === 'ip')       await searchIp(q);
+    else if (type === 'email')    await searchEmail(q);
+    else if (type === 'phone')    await searchPhone(q);
+    else if (type === 'image')    await searchImage(q);
+  } finally {
+    btn.disabled = false;
+  }
+
+  if (_lastData) {
+    document.getElementById('ai-section').style.display = 'block';
+  }
+}
+
+// ── Username / Profile ────────────────────────────────────────────────────
+const SRC = {
+  github:'GitHub', gitlab:'GitLab', linkedin:'LinkedIn',
+  instagram:'Instagram', twitter_x:'Twitter / X', tiktok:'TikTok',
+  youtube:'YouTube', telegram:'Telegram',
+  pinterest:'Pinterest', steam:'Steam', hackernews:'Hacker News',
+};
+
+async function searchUsername(q) {
+  setSt(spin('Barcha manbalar + Web qidiruv + Email pivot tahlil qilinmoqda...'));
+  try {
+    const d = await api('/profile?username=' + encodeURIComponent(q));
+    _lastData = d;
+    setSt(`<b>${d.summary.social_found}</b> ijtimoiy · <b>${d.summary.web_mentions}</b> web · <b>${d.summary.emails_found}</b> email`);
+    setRes(renderProfile(d));
+  } catch(err) {
+    setSt(`<span class="err">Xato: ${e(err.message)}</span>`);
+  }
+}
+
+function renderProfile(d) {
+  const s = d.summary;
+  let html = '';
+
+  // ── Photo gallery from all social sources ──
+  const photos = [];
+  (d.social || []).forEach(r => {
+    if (r.avatar && r.found) {
+      photos.push({ url: r.avatar, source: SRC[r.source] || r.source, profile: r.url || null });
+    }
+  });
+  if (photos.length) {
+    // Store globally for lightbox
+    window._galleryPhotos = photos;
+    html += `<div class="section-label">Profil rasmlari (${photos.length} ta topildi)</div>`;
+    html += `<div class="img-gallery">`;
+    photos.forEach((p, i) => {
+      html += `<div class="img-gallery-item" onclick="openLb(${i})" title="${e(p.source)}">
+        <img src="${e(p.url)}" alt="${e(p.source)}" onerror="this.closest('.img-gallery-item').style.display='none'">
+        <div class="img-src-label">${e(p.source)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div class="summary-grid">
+    <div class="sum-box"><div class="sum-num">${s.social_found}</div><div class="sum-label">Ijtimoiy tarmoq</div></div>
+    <div class="sum-box"><div class="sum-num">${s.web_mentions}</div><div class="sum-label">Web mention</div></div>
+    <div class="sum-box"><div class="sum-num">${s.emails_found}</div><div class="sum-label">Email topildi</div></div>
+    <div class="sum-box"><div class="sum-num">${s.names.length}</div><div class="sum-label">Ism</div></div>
+    <div class="sum-box"><div class="sum-num">${s.locations.length}</div><div class="sum-label">Joylashuv</div></div>
+  </div>`;
+
+  const p = d.pivots;
+  if (p.names.length || p.emails.length || p.phones.length || p.locations.length) {
+    html += `<div class="pivot-card"><div class="pivot-title">Topilgan pivot ma'lumotlar</div><div class="pivot-items">`;
+    p.names.forEach(n => html +=
+      `<div class="pivot-chip"><span class="sum-label">Ism</span><span class="pivot-val">${e(n)}</span></div>`);
+    p.locations.forEach(l => html +=
+      `<div class="pivot-chip"><span class="sum-label">Joylashuv</span><span class="pivot-val">${e(l)}</span></div>`);
+    p.emails.forEach(em => html +=
+      `<div class="pivot-chip">
+        <span class="sum-label">Email</span><span class="pivot-val">${e(em)}</span>
+        <button class="btn-pivot" onclick="pivot('${e(em)}')">Email tahlil</button>
+      </div>`);
+    p.phones.forEach(ph => html +=
+      `<div class="pivot-chip">
+        <span class="sum-label">Telefon</span><span class="pivot-val">${e(ph)}</span>
+        <button class="btn-pivot" onclick="pivot('${e(ph)}')">Tahlil</button>
+      </div>`);
+    html += `</div></div>`;
+  }
+
+  if (d.web_footprint.length) {
+    // Group by query/dork
+    const byQuery = {};
+    d.web_footprint.forEach(hit => {
+      const q = hit.query || 'Boshqa';
+      if (!byQuery[q]) byQuery[q] = [];
+      byQuery[q].push(hit);
+    });
+    html += `<div class="section-label">Web izlar — ${d.web_footprint.length} ta topildi</div>`;
+    for (const [query, hits] of Object.entries(byQuery)) {
+      html += `<div style="margin-bottom:6px;font-size:11px;color:var(--muted);font-style:italic;">
+        Dork: ${e(query)} (${hits.length} ta natija)</div>`;
+      html += `<div class="web-list" style="margin-bottom:14px;">`;
+      hits.forEach(hit => {
+        const domain = (() => { try { return new URL(hit.url).hostname; } catch{ return hit.url; } })();
+        html += `<div class="web-hit">
+          <div class="web-title"><a href="${e(hit.url)}" target="_blank">${e(hit.title || hit.url)}</a></div>
+          <div class="web-url" title="${e(hit.url)}">🌐 ${e(domain)}</div>
+          ${hit.snippet ? `<div class="web-snippet">${e(hit.snippet)}</div>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+  }
+
+  if (d.email_details.length) {
+    html += `<div class="section-label">Email tahlili (avtomatik pivot)</div>`;
+    d.email_details.forEach(em => { html += renderEmailCard(em); });
+  }
+  if (d.holehe.length) {
+    html += `<div class="section-label">Holehe — email orqali saytlar (avtomatik pivot)</div>`;
+    d.holehe.forEach(h => {
+      if (!h.found_on?.length) return;
+      html += `<div class="r-card">
+        <div class="r-card-title">${e(h.email||'')} — ${h.total_found} ta saytda topildi / ${h.total_checked||0} ta tekshirildi</div>
+        <div class="site-grid">`;
+      h.found_on.forEach(item => {
+        html += `<div class="site-card">
+          <div class="site-name">${e(item.site)}</div>
+          <div class="site-domain"><a href="https://${e(item.domain)}" target="_blank">${e(item.domain)}</a></div>
+          ${item.email_recovery ? `<div class="site-extra">📧 Tiklash: ${e(item.email_recovery)}</div>` : ''}
+          ${item.phone          ? `<div class="site-extra">📱 Tel: ${e(item.phone)}</div>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+      if (h.rate_limited?.length) {
+        html += `<p style="margin-top:10px;font-size:11px;color:var(--muted)">Rate-limit (noaniq): ${e(h.rate_limited.join(', '))}</p>`;
+      }
+      html += `</div>`;
+    });
+  }
+
+  const social = d.social.filter(r => r.source !== 'web_footprint');
+  if (social.length) {
+    const found  = social.filter(r => r.found && r.confidence !== 'low');
+    const unver  = social.filter(r => r.found && r.confidence === 'low');
+    const nofnd  = social.filter(r => !r.found);
+    html += `<div class="section-label">Ijtimoiy tarmoqlar</div>`;
+    if (found.length) { html += '<div class="source-list">'; found.forEach(r => { html += sourceCard(r); }); html += '</div>'; }
+    if (unver.length) { html += '<div class="section-label" style="margin-top:8px">Tasdiqlanmagan</div><div class="source-list">'; unver.forEach(r => { html += sourceCard(r); }); html += '</div>'; }
+    if (nofnd.length) { html += '<div class="section-label" style="margin-top:8px">Topilmadi</div><div class="source-list">'; nofnd.forEach(r => { html += sourceCard(r); }); html += '</div>'; }
+  }
+  return html;
+}
+
+const FIELD_LABELS = {
+  url:'URL', name:'Ism', full_name:"To'liq ism", display_name:"Ko'rsatma ism",
+  bio:'Bio', about:'Haqida', description:'Tavsif', summary:'Xulosa',
+  followers:'Followers', following:'Following', friends:'Do\'stlar',
+  public_repos:'Ommaviy repos', private_repos:'Xususiy repos',
+  karma:'Karma', comment_karma:'Comment karma', link_karma:'Link karma',
+  subscribers:'Subscribers', subscriber_count:"Obunachila r",
+  posts:"Postlar", videos:"Videolar", views:"Ko'rishlar", likes:"Layklar",
+  location:'Joylashuv', country:'Mamlakat', city:'Shahar', region:'Viloyat',
+  created_at:"Ro'yxatdan o'tgan", joined:"Qo'shilgan", registered:'Registered',
+  email:'Email', blog:'Blog', website:'Vebsayt', profile_url:"Profil URL",
+  language:'Til', games:"O'yinlar", level:'Daraja', playtime:"O'yin vaqti",
+  company:'Kompaniya', organization:'Tashkilot',
+  verified:'Tasdiqlangan', premium:'Premium',
+  is_private:'Yopiq', is_business:'Biznes',
+};
+const URL_FIELD = new Set(['url','website','blog','profile_url']);
+const SKIP_FIELD = new Set(['source','found','confidence','note','avatar','error','url_check','repos','found_on','rate_limited','hits']);
+
+function sourceCard(item) {
+  const name = SRC[item.source] || item.source;
+  if (!item.found) return `<div class="src-card"><div class="src-head">
+    <span class="src-name">${e(name)}</span><span class="badge b-no">✗ Topilmadi</span>
+  </div></div>`;
+
+  const low   = item.confidence === 'low';
+  const badge = low
+    ? `<span class="badge b-unver">⚠ Tasdiqlanmagan</span>`
+    : `<span class="badge b-found">✓ Topildi</span>`;
+
+  let body = '';
+  if (item.avatar) {
+    body += `<img class="avatar" src="${e(item.avatar)}" onerror="this.style.display='none'">`;
+  }
+
+  // Render ALL available fields dynamically
+  let rows = '';
+  for (const [key, val] of Object.entries(item)) {
+    if (SKIP_FIELD.has(key)) continue;
+    if (val == null || val === '' || val === false) continue;
+    if (typeof val === 'object' && !Array.isArray(val)) continue;
+    if (Array.isArray(val) && val.length && typeof val[0] === 'object') continue;
+    const label   = FIELD_LABELS[key] || key;
+    let   display;
+    if (URL_FIELD.has(key) && typeof val === 'string') {
+      display = `<a href="${e(val)}" target="_blank">${e(val)}</a>`;
+    } else if (key === 'url' && typeof val === 'string') {
+      display = `<a href="${e(val)}" target="_blank">${e(val)}</a>`;
+    } else if (Array.isArray(val)) {
+      display = e(val.join(', '));
+    } else if (val === true) {
+      display = '<span style="color:var(--found);font-weight:600">Ha</span>';
+    } else {
+      display = e(String(val));
+    }
+    rows += `<span class="kk">${e(label)}</span><span class="kv_">${display}</span>`;
+  }
+  if (rows) body += `<div class="kv">${rows}</div>`;
+
+  // GitHub repos list
+  if (item.source === 'github' && item.repos?.length) {
+    body += `<div style="margin-top:12px;">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:8px;">
+        Ommaviy repolar (${item.repos.length} ta, fork'lar chiqarildi)
+      </div>
+      <div class="repo-list">`;
+    item.repos.forEach(repo => {
+      const lang  = repo.language ? `<span class="repo-lang">${e(repo.language)}</span>` : '';
+      const stars = repo.stars    ? `<span class="repo-stat">★ ${repo.stars}</span>` : '';
+      const forks = repo.forks    ? `<span class="repo-stat">⑂ ${repo.forks}</span>` : '';
+      const topics = repo.topics?.length
+        ? `<div class="repo-topics">${repo.topics.slice(0,5).map(t=>`<span class="repo-topic">${e(t)}</span>`).join('')}</div>`
+        : '';
+      body += `<div class="repo-card">
+        <div class="repo-head">
+          <a class="repo-name" href="${e(repo.url)}" target="_blank">${e(repo.name)}</a>
+          <span class="repo-stats">${lang}${stars}${forks}</span>
+        </div>
+        ${repo.description ? `<div class="repo-desc">${e(repo.description)}</div>` : ''}
+        ${topics}
+        <div class="repo-date">So'nggi yangilanish: ${e(repo.updated_at)}</div>
+      </div>`;
+    });
+    body += `</div></div>`;
+  }
+
+  let html = `<div class="src-card">
+    <div class="src-head"><span class="src-name">${e(name)}</span>${badge}</div>`;
+  if (low) html += `<div class="unver-note">${e(item.note || "JS-render sahifasi — brauzerda qo'lda tasdiqlang")}</div>`;
+  if (body) html += `<div class="src-body">${body}</div>`;
+  return html + '</div>';
+}
+
+// ── IP ────────────────────────────────────────────────────────────────────
+async function searchIp(q) {
+  setSt(spin('IP tekshirilmoqda...'));
+  try {
+    const d = await api('/ip?address=' + encodeURIComponent(q));
+    if (!d.found) { setSt(`<span class="err">${e(d.error||'Topilmadi')}</span>`); return; }
+    _lastData = {type:'ip', data:d};
+    let warn = '';
+    if (d.is_proxy)   warn += '<span class="tag-warn">PROXY/VPN</span>';
+    if (d.is_hosting) warn += '<span class="tag-warn">HOSTING/DC</span>';
+    let rows = '';
+    rows += rrow('IP', e(d.ip), true);
+    rows += rrow('Mamlakat', `${e(d.country)} (${e(d.country_code)})`);
+    rows += rrow('Viloyat', e(d.region));
+    rows += rrow('Shahar', e(d.city));
+    rows += rrow('ISP', e(d.isp));
+    rows += rrow('Tashkilot', e(d.org));
+    rows += rrow('Vaqt zonasi', e(d.timezone));
+    rows += rrow('Proxy/VPN', d.is_proxy ? '⚠ Ha' : "Yo'q");
+    rows += rrow('Hosting/DC', d.is_hosting ? 'Ha' : "Yo'q");
+    if (d.lat) rows += rrow('Koordinata', `${d.lat}, ${d.lon}`);
+    setSt('');
+    setRes(`<div class="r-card"><div class="r-card-title">IP ma'lumotlari${warn}</div>${rkv(rows)}</div>`);
+    if (d.lat && d.lon) showMap(+d.lat, +d.lon, `${e(d.city)}, ${e(d.country)}`, 10);
+  } catch(err) { setSt(`<span class="err">Xato: ${e(err.message)}</span>`); }
+}
+
+// ── Phone ─────────────────────────────────────────────────────────────────
+const COUNTRY_COORDS = {
+  'Uzbekistan':[41.299,69.240],'Russia':[55.756,37.618],'Kazakhstan':[51.180,71.446],
+  'Kyrgyzstan':[42.875,74.570],'Tajikistan':[38.560,68.774],'Turkmenistan':[37.960,58.326],
+  'Azerbaijan':[40.409,49.867],'Ukraine':[50.450,30.523],'United States':[37.090,-95.713],
+  'Germany':[52.520,13.405],'France':[48.857,2.352],'Turkey':[39.933,32.860],
+  'China':[39.904,116.407],'India':[28.614,77.209],'United Kingdom':[51.507,-0.128],
+};
+async function searchPhone(q) {
+  setSt(spin('Raqam tekshirilmoqda...'));
+  try {
+    const d = await api('/phone?number=' + encodeURIComponent(q));
+    if (!d.found) { setSt(`<span class="err">${e(d.error||'Yaroqsiz raqam')}</span>`); return; }
+    _lastData = {type:'phone', data:d};
+    let rows = '';
+    rows += rrow('Xalqaro', e(d.number_international), true);
+    rows += rrow('E.164', e(d.number_e164));
+    rows += rrow('Mamlakat', e(d.country));
+    rows += rrow('Operator', e(d.carrier));
+    rows += rrow('Tur', e(d.type));
+    rows += rrow('Vaqt zonasi', e((d.timezones||[]).join(', ')));
+    setSt('');
+    setRes(`<div class="r-card"><div class="r-card-title">Raqam ma'lumotlari</div>${rkv(rows)}</div>`);
+    const coords = COUNTRY_COORDS[d.country];
+    if (coords) showMap(coords[0], coords[1], e(d.country), 4);
+  } catch(err) { setSt(`<span class="err">Xato: ${e(err.message)}</span>`); }
+}
+
+// ── Email + Holehe ────────────────────────────────────────────────────────
+async function searchEmail(q) {
+  setSt(spin('Email tahlil + 120 sayt tekshirilmoqda...'));
+  try {
+    const [emailData, holeheData] = await Promise.all([
+      api('/email?address=' + encodeURIComponent(q)).catch(err => ({error:err.message})),
+      api('/holehe?email=' + encodeURIComponent(q)).catch(err => ({error:err.message})),
+    ]);
+    _lastData = {type:'email', email:emailData, holehe:holeheData};
+    setSt(`Email tahlili + Holehe natijalari`);
+    let html = '';
+    if (!emailData.error) html += renderEmailCard(emailData);
+    if (!holeheData.error && holeheData.found_on?.length) {
+      html += `<div class="section-label">Holehe — ${holeheData.total_found} ta saytda topildi</div>`;
+      html += '<div class="site-grid">';
+      holeheData.found_on.forEach(item => {
+        html += `<div class="site-card"><div class="site-name">${e(item.site)}</div>
+          <div class="site-domain"><a href="https://${e(item.domain)}" target="_blank">${e(item.domain)}</a></div>
+          ${item.email_recovery?`<div class="site-extra">Tiklash: ${e(item.email_recovery)}</div>`:''}
+          ${item.phone?`<div class="site-extra">Tel: ${e(item.phone)}</div>`:''}</div>`;
+      });
+      html += '</div>';
+    } else if (!holeheData.error) {
+      html += `<div class="r-card"><div class="r-card-title">Holehe</div><p style="font-size:13px;color:var(--muted)">Hech qanday saytda topilmadi (${holeheData.total_checked||0} ta tekshirildi)</p></div>`;
+    }
+    setRes(html);
+  } catch(err) { setSt(`<span class="err">Xato: ${e(err.message)}</span>`); }
+}
+
+function renderEmailCard(d) {
+  let rows = '';
+  rows += rrow('Email', `<strong>${e(d.email)}</strong>`, false);
+  rows += rrow('Domen', e(d.domain));
+  rows += rrow('MX yozuvi', d.domain_has_mx
+    ? '<span style="color:var(--found);font-weight:600">Ha ✓</span>'
+    : '<span style="color:var(--red)">Yo\'q</span>');
+  if (d.mx_records?.length)    rows += rrow('MX serverlar', e(d.mx_records.join(', ')));
+  rows += rrow('Disposable',   d.is_disposable_domain
+    ? '<span style="color:var(--red);font-weight:600">⚠ Ha (vaqtinchalik email)</span>'
+    : "Yo'q");
+  if (d.existence)             rows += rrow('Holat', e(d.existence));
+  if (d.reputation)            rows += rrow('Reputatsiya', e(d.reputation));
+  if (d.is_suspicious != null) rows += rrow('Shubhali', d.is_suspicious
+    ? '<span style="color:var(--red);font-weight:600">⚠ Ha</span>' : "Yo'q");
+  if (d.first_seen)            rows += rrow('Birinchi ko\'rilgan', e(d.first_seen));
+  if (d.last_seen)             rows += rrow('Oxirgi ko\'rilgan', e(d.last_seen));
+  if (d.has_gravatar)          rows += rrow('Gravatar', `<a href="${e(d.gravatar_url)}" target="_blank">Ha — rasmni ko'rish →</a>`);
+  if (d.profiles?.length)      rows += rrow('Profillar', e(d.profiles.join(', ')));
+  if (d.sources?.length)       rows += rrow('Manbalar', e(d.sources.join(', ')));
+  if (d.details)               rows += rrow('Batafsil', e(d.details));
+
+  let html = `<div class="r-card"><div class="r-card-title">Email tahlili</div>${rkv(rows)}</div>`;
+
+  if (d.smtp) {
+    let sr = '';
+    if (d.smtp.result)   sr += rrow('Natija', e(d.smtp.result));
+    if (d.smtp.code)     sr += rrow('Kod', String(d.smtp.code));
+    if (d.smtp.note)     sr += rrow('Izoh', e(d.smtp.note));
+    if (d.smtp.message)  sr += rrow('Xabar', e(d.smtp.message));
+    if (sr) html += `<div class="r-card"><div class="r-card-title">SMTP tekshiruv</div>${rkv(sr)}</div>`;
+  }
+  return html;
+}
+
+// ── Image ─────────────────────────────────────────────────────────────────
+async function searchImage(q) {
+  setSt(spin('Rasm tahlil qilinmoqda...'));
+  try {
+    const d = await api('/image?url=' + encodeURIComponent(q));
+    _lastData = {type:'image', data:d};
+    setSt('');
+    let html = `<img class="img-preview" src="${e(d.image_url)}" onerror="this.style.display='none'">`;
+    if (d.content_type || d.size_kb || d.dimensions) {
+      let rows = '';
+      if (d.content_type) rows += rrow('Tur', e(d.content_type));
+      if (d.size_kb)      rows += rrow('Hajm', d.size_kb + ' KB');
+      if (d.dimensions)   rows += rrow("O'lcham", e(d.dimensions));
+      if (d.format)       rows += rrow('Format', e(d.format));
+      html += `<div class="r-card"><div class="r-card-title">Fayl</div>${rkv(rows)}</div>`;
+    }
+    if (d.exif && Object.keys(d.exif).length) {
+      let rows = ''; for (const [k,v] of Object.entries(d.exif)) rows += rrow(e(k), e(v));
+      html += `<div class="r-card"><div class="r-card-title">EXIF</div>${rkv(rows)}</div>`;
+    }
+    if (d.gps_maps) html += `<div class="r-card"><div class="r-card-title">GPS</div><a href="${e(d.gps_maps)}" target="_blank" style="font-size:13px;color:var(--accent)">Google Maps da ko'rish →</a></div>`;
+    html += `<div class="r-card"><div class="r-card-title">Reverse image qidiruv</div><div class="rev-links">`;
+    for (const [name,link] of Object.entries(d.reverse_search||{})) html += `<a class="rev-link" href="${e(link)}" target="_blank">${e(name)}</a>`;
+    html += '</div></div>';
+    setRes(html);
+  } catch(err) { setSt(`<span class="err">Xato: ${e(err.message)}</span>`); }
+}
+
+// ── Pivot ─────────────────────────────────────────────────────────────────
+function pivot(val) {
+  document.getElementById('q-field').value = val;
+  window.scrollTo({top:0, behavior:'smooth'});
+  doSearch();
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────
+function showMap(lat, lon, label, zoom) {
+  const el = document.getElementById('map-field');
+  el.style.display = 'block';
+  if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; }
+  _leafletMap = L.map('map-field').setView([lat, lon], zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© OpenStreetMap', maxZoom:19
+  }).addTo(_leafletMap);
+  L.circleMarker([lat, lon], {radius:9, color:'#dc2626', fillColor:'#dc2626', fillOpacity:.85, weight:2})
+    .addTo(_leafletMap).bindPopup(label).openPopup();
+}
+function hideMap() {
+  document.getElementById('map-field').style.display = 'none';
+  if (_leafletMap) { _leafletMap.remove(); _leafletMap = null; }
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────
+let _lbIdx = 0;
+
+function openLb(idx) {
+  _lbIdx = idx;
+  _renderLb();
+  document.getElementById('lightbox').classList.add('open');
+  document.addEventListener('keydown', lbKeyHandler);
+}
+function closeLb() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.removeEventListener('keydown', lbKeyHandler);
+}
+function lbBgClick(ev) { if (ev.target === document.getElementById('lightbox')) closeLb(); }
+function lbNav(dir) {
+  const photos = window._galleryPhotos || [];
+  _lbIdx = (_lbIdx + dir + photos.length) % photos.length;
+  _renderLb();
+}
+function lbKeyHandler(ev) {
+  if (ev.key === 'Escape')      closeLb();
+  if (ev.key === 'ArrowRight')  lbNav(1);
+  if (ev.key === 'ArrowLeft')   lbNav(-1);
+}
+function _renderLb() {
+  const photos = window._galleryPhotos || [];
+  if (!photos.length) return;
+  const p = photos[_lbIdx];
+  document.getElementById('lb-img').src       = p.url;
+  document.getElementById('lb-source').textContent = p.source;
+  document.getElementById('lb-link').href     = p.profile || p.url;
+  document.getElementById('lb-counter').textContent = `${_lbIdx + 1} / ${photos.length}`;
+}
+
+// ── Copy JSON ─────────────────────────────────────────────────────────────
+async function copyJson() {
+  if (!_lastData) return;
+  const btn = document.getElementById('btn-copy-json');
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(_lastData, null, 2));
+    btn.classList.add('copied');
+    document.getElementById('copy-icon').textContent = '✓';
+    btn.querySelector('span').nextSibling.textContent = ' Nusxalandi!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      document.getElementById('copy-icon').textContent = '⎘';
+      btn.querySelector('span').nextSibling.textContent = ' JSON nusxalash';
+    }, 2000);
+  } catch {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = JSON.stringify(_lastData, null, 2);
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.classList.add('copied');
+    setTimeout(() => btn.classList.remove('copied'), 2000);
+  }
+}
+
+// ── AI Analyze ────────────────────────────────────────────────────────────
+function mdToHtml(md) {
+  return md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/^---+$/gm, '<hr>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^#### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^[\*\-\•] (.+)$/gm,'<li>$1</li>')
+    .replace(/^\d+\. (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    .replace(/\n{2,}/g,'<br><br>')
+    .replace(/\n/g,'<br>');
+}
+
+async function doAiAnalyze() {
+  if (!_lastData) return;
+  const btn = document.getElementById('btn-ai');
+  btn.disabled = true;
+  const rAi = document.getElementById('r-ai');
+  rAi.innerHTML = `<div class="an-loading">
+    <div class="an-spinner"></div>
+    <span>AI tahlil qilinmoqda...</span>
+    <span style="font-size:11px;color:var(--light)">20–40 soniya vaqt olishi mumkin</span>
+  </div>`;
+  try {
+    const token = getToken();
+    const headers = {'Content-Type':'application/json'};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const resp = await fetch('/ai/analyze', {method:'POST', headers, body:JSON.stringify(_lastData)});
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    if (data.error) { rAi.innerHTML = `<div class="ai-output"><span class="err">Xato: ${e(data.error)}</span></div>`; return; }
+    let html = '';
+    if (data.report) html += `<div class="ai-output">${mdToHtml(data.report)}</div>`;
+    if (data.analytics && Object.keys(data.analytics).length) html += renderAnalytics(data.analytics);
+    rAi.innerHTML = html;
+  } catch(err) {
+    rAi.innerHTML = `<div class="ai-output"><span class="err">Xato: ${e(err.message)}</span></div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Analytics rendering ───────────────────────────────────────────────────
+
+const PLATFORM_COLORS = {
+  github:'#24292f',telegram:'#229ED9',instagram:'#E1306C',twitter:'#1DA1F2',
+  tiktok:'#111111',linkedin:'#0A66C2',youtube:'#FF0000',steam:'#1b2838',
+  hackernews:'#FF6600',gitlab:'#FC6D26',pinterest:'#E60023',email:'#6d28d9',
+  phone:'#059669',web:'#6b7280',username:'#3f3f46'
+};
+
+function pColor(type){ return PLATFORM_COLORS[(type||'').toLowerCase()] || '#6b7280'; }
+function confColor(v){ return v>=0.75?'#15803d':v>=0.45?'#d97706':'#dc2626'; }
+function pctStr(v){ return Math.round((v||0)*100)+'%'; }
+
+function renderAnalytics(an) {
+  const ic = an.identity_confidence || {};
+  const overall = ic.overall || 0;
+  const foundPlatforms = (an.platform_scores||[]).filter(p=>p.found).length;
+  const topLoc = (an.location_probabilities||[])[0];
+  const highRisk = (an.risk_indicators||[]).some(r=>r.level==='high');
+  const midRisk  = (an.risk_indicators||[]).some(r=>r.level==='medium');
+  const riskTxt  = highRisk ? 'Yuqori' : midRisk ? "O'rta" : 'Past';
+  const riskClr  = highRisk ? '#dc2626' : midRisk ? '#d97706' : '#15803d';
+  const SIG_COLORS = ['#6d28d9','#1d4ed8','#059669','#d97706','#dc2626','#0891b2'];
+
+  let h = `<div class="analytics-wrap">`;
+
+  // ── Summary metrics ──
+  h += `<div class="an-metrics">
+    <div class="an-metric">
+      <div class="an-metric-value" style="color:${confColor(overall)}">${pctStr(overall)}</div>
+      <div class="an-metric-label">Umumiy Ishonch</div>
+    </div>
+    <div class="an-metric">
+      <div class="an-metric-value">${foundPlatforms}</div>
+      <div class="an-metric-label">Platforma Topildi</div>
+    </div>
+    <div class="an-metric">
+      <div class="an-metric-value" style="font-size:${topLoc&&topLoc.location.length>12?'12px':'16px'}">${topLoc?e(topLoc.location):'—'}</div>
+      <div class="an-metric-label">Asosiy Joylashuv</div>
+    </div>
+    <div class="an-metric">
+      <div class="an-metric-value" style="color:${riskClr}">${e(riskTxt)}</div>
+      <div class="an-metric-label">Xavf Darajasi</div>
+    </div>
+  </div>`;
+
+  // ── Platform scores + Location ──
+  h += `<div class="an-row-2">`;
+  const scores = an.platform_scores || [];
+  if (scores.length) {
+    h += `<div class="an-panel"><div class="an-panel-title">Platforma Ballari</div>`;
+    scores.forEach(p => {
+      const pv = Math.round((p.score||0)*100);
+      h += `<div class="an-bar-row${p.found?'':' an-not-found'}">
+        <div class="an-bar-name" title="${e(p.label||p.platform)}">${e(p.label||p.platform)}</div>
+        <div class="an-bar-track"><div class="an-bar-fill" style="width:${pv}%;background:${pColor(p.platform)}"></div></div>
+        <div class="an-bar-pct">${pv}%</div>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+  const locs = an.location_probabilities || [];
+  if (locs.length) {
+    h += `<div class="an-panel"><div class="an-panel-title">Joylashuv Ehtimoli</div>`;
+    locs.slice(0,6).forEach(loc => {
+      const lv = Math.round((loc.probability||0)*100);
+      const srcs = loc.sources || [];
+      h += `<div class="an-loc-row">
+        <div class="an-loc-head"><span class="an-loc-name">${e(loc.location)}</span><span class="an-loc-pct">${lv}%</span></div>
+        <div class="an-loc-track"><div class="an-loc-fill" style="width:${lv}%"></div></div>
+        ${srcs.length?`<div class="an-loc-sources">${srcs.map(s=>`<span class="an-source-tag">${e(s)}</span>`).join('')}</div>`:''}
+      </div>`;
+    });
+    h += `</div>`;
+  }
+  h += `</div>`;
+
+  // ── Relationship graph ──
+  const graph = an.relationship_graph;
+  if (graph?.nodes?.length) {
+    h += `<div class="an-panel">
+      <div class="an-panel-title">Munosabatlar Grafigi</div>
+      <div class="an-graph-wrap">${buildGraphSVG(graph)}</div>
+    </div>`;
+  }
+
+  // ── Identity confidence + Signal distribution ──
+  h += `<div class="an-row-2">`;
+  if (Object.keys(ic).length) {
+    const dims = [{k:'real_name',l:"Haqiqiy Ism"},{k:'location',l:'Joylashuv'},{k:'occupation',l:'Kasb'},{k:'social_links',l:'Ijtimoiy'}];
+    h += `<div class="an-panel"><div class="an-panel-title">Shaxs Ko'rsatkichlari</div>
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+          <span style="font-weight:600">Umumiy</span>
+          <span style="color:${confColor(overall)};font-weight:700">${pctStr(overall)}</span>
+        </div>
+        <div class="an-id-bar"><div class="an-id-fill" style="width:${pctStr(overall)};background:${confColor(overall)}"></div></div>
+      </div>
+      <div class="an-id-grid">`;
+    dims.forEach(d=>{
+      const v=ic[d.k]||0;
+      h+=`<div><div class="an-id-label">${d.l}</div>
+        <div class="an-id-bar"><div class="an-id-fill" style="width:${pctStr(v)};background:${confColor(v)}"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${pctStr(v)}</div></div>`;
+    });
+    h += `</div></div>`;
+  }
+  const sigs = an.signal_distribution || [];
+  if (sigs.length) {
+    h += `<div class="an-panel"><div class="an-panel-title">Signal Taqsimoti</div>`;
+    sigs.forEach((s,i)=>{
+      const w=Math.round((s.weight||0)*100);
+      h+=`<div class="an-signal-bar-wrap">
+        <div class="an-signal-label"><span>${e(s.category)}</span><span style="color:var(--muted)">${s.count} ta · ${w}%</span></div>
+        <div class="an-signal-track"><div class="an-signal-fill" style="width:${w}%;background:${SIG_COLORS[i%SIG_COLORS.length]}"></div></div>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+  h += `</div>`;
+
+  // ── Risk indicators + Technical signals ──
+  h += `<div class="an-row-2">`;
+  const risks = an.risk_indicators || [];
+  if (risks.length) {
+    h += `<div class="an-panel"><div class="an-panel-title">Xavf Ko'rsatkichlari</div>`;
+    risks.forEach(r=>{
+      h+=`<div class="an-risk-item an-risk-${r.level||'low'}">
+        <span class="an-risk-badge">${e(r.level||'?')}</span>
+        <span class="an-risk-desc">${e(r.description||r.type)}</span>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+  const tech = an.technical_signals || [];
+  if (tech.length) {
+    h += `<div class="an-panel"><div class="an-panel-title">Texnik Signallar</div>`;
+    tech.forEach(t=>{
+      h+=`<div class="an-tech-item">
+        <span class="an-tech-label">${e(t.signal)}</span>
+        <span style="display:flex;align-items:center;min-width:0">
+          <span class="an-tech-val">${e(t.value)}</span>
+          <span class="an-tech-conf">${Math.round((t.confidence||0)*100)}%</span>
+        </span>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+  h += `</div></div>`;
+  return h;
+}
+
+function buildGraphSVG(graph) {
+  const nodes = graph.nodes || [];
+  const edges = graph.edges || [];
+  if (!nodes.length) return '<p style="color:var(--muted);font-size:13px;padding:16px">Ma\'lumot yo\'q</p>';
+
+  const W = 580, H = 270, cx = W/2, cy = H/2;
+  const R = Math.min(cx, cy) - 52;
+  const N = nodes.length;
+
+  const pos = {};
+  nodes.forEach((n, i) => {
+    const a = (2*Math.PI*i/N) - Math.PI/2;
+    pos[n.id] = { x: N===1?cx : cx+R*Math.cos(a), y: N===1?cy : cy+R*Math.sin(a) };
+  });
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
+    <defs>
+      <marker id="arrowhead" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+        <path d="M0,0 L0,7 L7,3.5 z" fill="#a78bfa" opacity="0.7"/>
+      </marker>
+    </defs>`;
+
+  edges.forEach(edge => {
+    const s=pos[edge.source], t=pos[edge.target];
+    if (!s||!t) return;
+    const str = Math.min(1,Math.max(0,edge.strength||0.5));
+    const op = (0.2+str*0.6).toFixed(2);
+    const sw = (0.8+str*2.4).toFixed(1);
+    const dx=t.y-s.y, dy=s.x-t.x, len=Math.sqrt(dx*dx+dy*dy)||1;
+    const bend=28;
+    const qx=((s.x+t.x)/2)+(dx/len)*bend, qy=((s.y+t.y)/2)+(dy/len)*bend;
+    svg+=`<path d="M${s.x.toFixed(1)},${s.y.toFixed(1)} Q${qx.toFixed(1)},${qy.toFixed(1)} ${t.x.toFixed(1)},${t.y.toFixed(1)}"
+      fill="none" stroke="#a78bfa" stroke-width="${sw}" stroke-opacity="${op}" marker-end="url(#arrowhead)">
+      <title>${e(edge.reason||'')} — kuch: ${Math.round(str*100)}%</title></path>`;
+  });
+
+  nodes.forEach(n => {
+    const p=pos[n.id];
+    const color=pColor(n.type);
+    const conf=Math.min(1,Math.max(0,n.confidence||0.5));
+    const nr=(15+conf*9).toFixed(0);
+    const label=(n.label||n.id.split(':')[1]||n.id);
+    const shortLabel=label.length>13?label.slice(0,12)+'…':label;
+    const typeAbbr=(n.type||'').slice(0,2).toUpperCase();
+    svg+=`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${nr}"
+      fill="${color}" stroke="white" stroke-width="2" style="filter:drop-shadow(0 1px 4px rgba(0,0,0,.25))">
+      <title>${e(n.id)} — ishonch: ${Math.round(conf*100)}%</title></circle>
+    <text x="${p.x.toFixed(1)}" y="${(p.y+4).toFixed(1)}" text-anchor="middle"
+      font-size="9" font-weight="700" fill="white" font-family="Inter,sans-serif" style="pointer-events:none">${e(typeAbbr)}</text>
+    <text x="${p.x.toFixed(1)}" y="${(p.y+Number(nr)+14).toFixed(1)}" text-anchor="middle"
+      font-size="11" fill="var(--text)" font-family="Inter,sans-serif" font-weight="500" style="pointer-events:none">${e(shortLabel)}</text>`;
+  });
+
+  svg += '</svg>';
+  return svg;
+}
+
+// ── History ───────────────────────────────────────────────────────────────
+let historyVisible = false;
+function toggleHistory() {
+  historyVisible = !historyVisible;
+  const panel = document.getElementById('history-panel');
+  panel.style.display = historyVisible ? 'block' : 'none';
+  if (historyVisible) loadHistory();
+}
+
+const TYPE_LABEL = {username:'Username',ip:'IP',phone:'Telefon',holehe:'Email→Saytlar',image:'Rasm',email:'Email',profile:'Profil'};
+
+async function loadHistory() {
+  if (!getToken()) return;
+  document.getElementById('st-history').innerHTML = spin('Yuklanmoqda...');
+  document.getElementById('r-history').innerHTML = '';
+  try {
+    const data = await api('/history/?limit=100');
+    document.getElementById('st-history').innerHTML = `Jami <b>${data.total}</b> ta qidiruv`;
+    if (!data.items.length) { document.getElementById('r-history').innerHTML = '<p style="font-size:13px;color:var(--muted)">Hali hech narsa qidirilmagan.</p>'; return; }
+    let html = '<div class="history-list">';
+    for (const item of data.items) {
+      const label   = TYPE_LABEL[item.search_type] || item.search_type;
+      const dateStr = new Date(item.searched_at).toLocaleString('uz-UZ');
+      const r       = item.result;
+      let summary   = '';
+      if (item.search_type==='username') summary = `<span style="color:var(--found);font-weight:600">${r.total_found}</span> / ${r.total_checked} platformada`;
+      else if (item.search_type==='profile' && r.summary) summary = `${r.summary.social_found} ijtimoiy · ${r.summary.web_mentions} web · ${r.summary.emails_found} email`;
+      else if (item.search_type==='ip' && r.found) summary = e(r.country||'') + (r.city?', '+e(r.city):'');
+      else if (item.search_type==='phone' && r.found) summary = `${e(r.country||'')} · ${e(r.carrier||'')}`;
+      else if (item.search_type==='holehe') summary = `${r.total_found} saytda topildi`;
+      else if (item.search_type==='email') summary = e(r.existence||'');
+      html += `<div class="h-card" id="hc-${item.id}">
+        <div class="h-head">
+          <span class="h-badge hb-${item.search_type}">${e(label)}</span>
+          <span class="h-query">${e(item.query)}</span>
+          <span class="h-date">${e(dateStr)}</span>
+          <button class="h-del" onclick="deleteHistory(${item.id})">×</button>
+        </div>
+        ${summary?`<div class="h-summary">${summary}</div>`:''}
+      </div>`;
+    }
+    html += '</div>';
+    document.getElementById('r-history').innerHTML = html;
+  } catch(err) {
+    document.getElementById('st-history').innerHTML = `<span class="err">Xato: ${e(err.message)}</span>`;
+  }
+}
+
+async function deleteHistory(id) {
+  const card = document.getElementById('hc-' + id);
+  if (!card) return;
+  try { await api('/history/'+id, {method:'DELETE'}); card.remove(); }
+  catch(err) { alert("O'chirishda xato: " + err.message); }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+updateAuthUI();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+httpx
+jinja2
+phonenumbers
+dnspython
+Pillow
+holehe
+sqlalchemy[asyncio]
+aiosqlite
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+email-validator
+ddgs
+google-genai
