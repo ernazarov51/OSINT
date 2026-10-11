@@ -7,6 +7,7 @@ async def lookup_ip(address: str) -> dict:
             r = await client.get(url)
             data = r.json()
 
+
         if data.get("status") == "fail":
             return {"found": False, "error": data.get("message", "Noma'lum xato")}
 
